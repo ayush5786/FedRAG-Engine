@@ -69,9 +69,16 @@ def build_vector_database():
 # FIX: We catch the URL variable here!
 speech_chunks, index, latest_speech_url = build_vector_database()
 
-# --- UI: Interactive Elements ---
+# --- Secure API Key Handling ---
 st.sidebar.header("Configuration")
-api_key = st.sidebar.text_input("Enter Groq API Key:", type="password")
+
+# Check if the API key is securely stored in Streamlit's Cloud Secrets
+if "GROQ_API_KEY" in st.secrets:
+    api_key = st.secrets["GROQ_API_KEY"]
+    st.sidebar.success("✅ API Key securely loaded from server environment.")
+else:
+    # Fallback: If no secret is found, ask the user to input one
+    api_key = st.sidebar.text_input("Enter Groq API Key:", type="password")
 
 st.markdown("### Semantic Search Engine")
 user_query = st.text_input("Ask a question about the latest Fed Speech:")
