@@ -1,8 +1,8 @@
 # 🏦 FedRAG Engine: Deterministic Macroeconomic Signal Extraction
 
-**Live Demo:** [Click here to view the live app on Streamlit Cloud](INSERT_YOUR_STREAMLIT_LINK_HERE)
+**Live Demo:** [Click here to view the live app on Streamlit Cloud](https://ayush5786-fedrag-engine-fed-app-5asgp0.streamlit.app/)
 
-![App Screenshot](INSERT_THE_EXACT_FILENAME_OF_YOUR_SCREENSHOT_HERE.png)
+![App Screenshot](FedRAG-Engine.png)
 
 ## Overview
 The FedRAG Engine is an automated, real-time extraction pipeline designed for quantitative finance. It dynamically scrapes live XML feeds from the U.S. Federal Reserve, builds an in-memory vector database, and utilizes the Groq Llama-3.3 70B model to extract macroeconomic signals (Hawkish, Dovish, Neutral). 
