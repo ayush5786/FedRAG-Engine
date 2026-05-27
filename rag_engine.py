@@ -69,7 +69,8 @@ def generate_macro_signal(query, retrieved_chunks, api_key):
 
     system_prompt = """
     You are an expert Quantitative Analyst. Analyze the Federal Reserve text and answer the user's query.
-    You must output ONLY valid JSON.
+    You must output ONLY valid JSON. Only extract a signal if the text explicitly pertains to United States inflation or US interest rate policy. 
+    If the user asks about global metrics not directly tied to the US, flag it as Out of Scope."
     
     MACROECONOMIC RUBRIC:
     - Strongly Hawkish: Explicit plans to raise rates or strict inflation warnings.
