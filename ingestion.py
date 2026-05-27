@@ -1,6 +1,7 @@
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+import time
 
 TRASH_TITLES = ["commencement", "welcome", "opening remarks", "graduation", "community", "welcoming"]
 MACRO_KEYWORDS = ["inflation", "rates", "cpi", "fomc", "labor", "employment", "policy", "yield"]
@@ -49,15 +50,11 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
         # --- THE FIX: Robust Date Extraction ---
         # Check 'published' first, then 'updated', then fallback.
         # Check every possible XML date tag format
-        raw_date = entry.get('published') or entry.get('updated') or entry.get('pubDate') or 'Unknown Date'
-        
-        if raw_date != 'Unknown Date':
-            if "T" in raw_date:
-                clean_date = raw_date.split("T")[0]
-            else:
-                # Safely split standard RSS dates
-                parts = raw_date.split(" ")
-                clean_date = " ".join(parts[:4]) if len(parts) >= 4 else raw_date
+        # --- THE ULTIMATE DATE FIX ---
+        # This sits right after we grab the title/link, and before the filters!
+        if hasattr(entry, 'published_parsed') and entry.published_parsed:
+            # Forces clean "Month DD, YYYY" format (e.g., "May 27, 2026")
+            clean_date = time.strftime("%B %d, %Y", entry.published_parsed)
         else:
             clean_date = "Unknown Date"
         
