@@ -76,6 +76,7 @@ def generate_macro_signal(query, retrieved_chunks, api_key):
     - Neutral: Balanced risks, maintaining current levels.
     - Moderately Dovish: Leaning toward rate cuts, acknowledging economic slowing.
     - Strongly Dovish: Explicit plans to cut rates or inject liquidity.
+    - Out of Scope: If the provided context does not explicitly contain enough information to answer the user's historical or unrelated query.
     
     JSON SCHEMA:
     {
