@@ -24,7 +24,7 @@ def scrape_speech_text(url):
         response = requests.get(url, timeout=5)
         soup = BeautifulSoup(response.content, 'html.parser')
         paragraphs = soup.find_all('p')
-        text = " ".join([p.get_text() for p in paragraphs])
+        text = "\n\n".join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
         return text
     except Exception as e:
         print(f"Error scraping {url}: {e}")
