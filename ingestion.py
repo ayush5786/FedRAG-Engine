@@ -45,11 +45,19 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
         
         title = entry.title
         link = entry.link
+
+        # --- THE FIX: Robust Date Extraction ---
+        # Check 'published' first, then 'updated', then fallback.
+        raw_date = entry.get('published') or entry.get('updated') or 'Unknown Date'
         
-        # --- THE FIX: Grab and format the date ---
-        raw_date = entry.get('published', 'Unknown Date')
-        # Splitting "Wed, 27 May 2026 14:00:00 GMT" into just "Wed, 27 May 2026"
-        clean_date = " ".join(raw_date.split(" ")[:4]) if raw_date != 'Unknown Date' else raw_date
+        if raw_date != 'Unknown Date':
+            # Handle standard RSS ("Wed, 27 May 2026...") AND Atom ISO ("2026-05-27T14:00:00Z")
+            if "T" in raw_date:
+                clean_date = raw_date.split("T")[0]  # Extracts just the YYYY-MM-DD
+            else:
+                clean_date = " ".join(raw_date.split(" ")[:4])  # Extracts "Wed, 27 May 2026"
+        else:
+            clean_date = "Unknown Date"
         
         # Stage 1: Fast Filter
         if metadata_filter(title) == "DROP":
