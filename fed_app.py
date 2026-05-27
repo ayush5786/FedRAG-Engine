@@ -21,6 +21,17 @@ with st.sidebar:
     else:
         st.success("API key securely loaded from server environment.")
 
+with st.sidebar:
+    st.header("📚 Active Data Context")
+    st.caption("These speeches passed the macroeconomic filter and are currently loaded in the database:")
+    
+    if 'speeches' in locals() and speeches:
+        for i, speech in enumerate(speeches):
+            # Creates a clickable link for each speech title
+            st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})")
+    else:
+        st.write("No speeches loaded.")
+
 # --- CACHE 1: Data Ingestion (TTL = 1 hour) ---
 @st.cache_data(ttl=3600)
 def get_clean_data():
