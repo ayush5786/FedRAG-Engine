@@ -2,7 +2,7 @@
 
 **Live Demo:** [Click here to view the live app on Streamlit Cloud](https://ayush5786-fedrag-engine-fed-app-5asgp0.streamlit.app/)
 
-![App Screenshot](FedRAG-Engine.png)
+![App Screenshot]()
 
 ## Overview
 
