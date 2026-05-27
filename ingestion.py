@@ -48,14 +48,16 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
 
         # --- THE FIX: Robust Date Extraction ---
         # Check 'published' first, then 'updated', then fallback.
-        raw_date = entry.get('published') or entry.get('updated') or 'Unknown Date'
+        # Check every possible XML date tag format
+        raw_date = entry.get('published') or entry.get('updated') or entry.get('pubDate') or 'Unknown Date'
         
         if raw_date != 'Unknown Date':
-            # Handle standard RSS ("Wed, 27 May 2026...") AND Atom ISO ("2026-05-27T14:00:00Z")
             if "T" in raw_date:
-                clean_date = raw_date.split("T")[0]  # Extracts just the YYYY-MM-DD
+                clean_date = raw_date.split("T")[0]
             else:
-                clean_date = " ".join(raw_date.split(" ")[:4])  # Extracts "Wed, 27 May 2026"
+                # Safely split standard RSS dates
+                parts = raw_date.split(" ")
+                clean_date = " ".join(parts[:4]) if len(parts) >= 4 else raw_date
         else:
             clean_date = "Unknown Date"
         
