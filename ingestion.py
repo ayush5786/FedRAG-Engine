@@ -24,12 +24,17 @@ def scrape_speech_text(url):
     try:
         response = requests.get(url, timeout=5)
         soup = BeautifulSoup(response.content, 'html.parser')
+        date_tag = soup.find('p', class_='article__time')
+        if date_tag:
+            speech_date = date_tag.get_text(strip=True)
+        else:
+            speech_date = "Date not provided"
         paragraphs = soup.find_all('p')
-        text = "\n\n".join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
-        return text
+        speech_text = "\n\n".join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+        return speech_text, speech_date
     except Exception as e:
         print(f"Error scraping {url}: {e}")
-        return ""
+        return "", "Date not provided."
 
 def fetch_valid_speeches(rss_url, target_valid_speeches=5):
     feed = feedparser.parse(rss_url)
@@ -63,7 +68,7 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
             continue
             
         # Stage 2: Smart Filter
-        speech_text = scrape_speech_text(link)
+        speech_text, clean_date = scrape_speech_text(link)
         if keyword_bouncer(speech_text):
             valid_speeches.append({
                 "title": title,
