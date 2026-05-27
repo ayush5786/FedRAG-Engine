@@ -6,9 +6,9 @@
 
 ## Overview
 
-The FedRAG Engine is an automated, real-time extraction pipeline designed for quantitative finance. It dynamically scrapes live XML feeds from the U.S. Federal Reserve, builds an in-memory vector database, and utilizes the Groq Llama-3.3 70B model to extract macroeconomic signals (Hawkish, Dovish, Neutral).
+The FedRAG Engine is an automated, real-time extraction pipeline designed for quantitative finance. It dynamically scrapes live XML feeds from the U.S. Federal Reserve, builds an in-memory vector database, and utilizes the Groq Llama-3.3 70B model to extract deterministic macroeconomic signals based on a **strict 5-point granular rubric** (Strongly Hawkish, Moderately Hawkish, Neutral, Moderately Dovish, Strongly Dovish).
 
-To ensure high-fidelity context, the system features a dynamic slider allowing users to scale the active context pool (1 to 10 speeches) using a custom "Find-Exactly-N" validation filter. Most importantly, it features a strict **Python Set-Theory safety net** to mathematically detect and prevent LLM hallucinations, completely replacing unreliable LLM confidence scores.
+To ensure high-fidelity context, the system features a dynamic slider allowing users to scale the active context pool (1 to 10 speeches) using a custom "Find-Exactly-N" validation filter. Most importantly, it features strict boundary enforcement ("Out of Scope") to guarantee graceful failure on irrelevant queries, and a custom **Python Set-Theory safety net** to mathematically detect and prevent LLM hallucinations, completely replacing unreliable LLM confidence scores.
 
 ## 🛠️ Architecture & Tech Stack
 
