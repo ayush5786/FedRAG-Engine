@@ -41,10 +41,15 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
     # Keep scraping until we have exactly what we need (or we run out of speeches)
     while len(valid_speeches) < target_valid_speeches and entry_index < total_entries:
         entry = feed.entries[entry_index]
-        entry_index += 1  # Move to the next speech for the next loop
+        entry_index += 1  
         
         title = entry.title
         link = entry.link
+        
+        # --- THE FIX: Grab and format the date ---
+        raw_date = entry.get('published', 'Unknown Date')
+        # Splitting "Wed, 27 May 2026 14:00:00 GMT" into just "Wed, 27 May 2026"
+        clean_date = " ".join(raw_date.split(" ")[:4]) if raw_date != 'Unknown Date' else raw_date
         
         # Stage 1: Fast Filter
         if metadata_filter(title) == "DROP":
@@ -56,7 +61,8 @@ def fetch_valid_speeches(rss_url, target_valid_speeches=5):
             valid_speeches.append({
                 "title": title,
                 "url": link,
-                "text": speech_text
+                "text": speech_text,
+                "date": clean_date  # <-- We add the date to the payload!
             })
             
     return valid_speeches
