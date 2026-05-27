@@ -58,9 +58,13 @@ with st.sidebar:
     st.header("📚 Active Data Context")
     st.caption("These speeches passed the macroeconomic filter and are powering the AI:")
     for i, speech in enumerate(speeches):
-        # We added the date in italics right below the clickable title
-        st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})  \n*{speech.get('date', 'Unknown Date')}*")
-
+        # Clean the title so weird characters don't break Streamlit's Markdown
+        safe_title = speech.get('title', 'Untitled').replace('[', '(').replace(']', ')')
+        safe_url = speech.get('url', '#')
+        safe_date = speech.get('date', 'Unknown Date')
+        
+        st.markdown(f"**{i+1}.** [{safe_title}]({safe_url})  \n*{safe_date}*")
+        
 # --- UI INTERACTION ---
 query = st.text_input("Ask a macro question (e.g., 'What is the stance on inflation?'):")
 
