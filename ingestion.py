@@ -2,6 +2,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 import time
+from datetime import datetime
 
 TRASH_TITLES = ["commencement", "welcome", "opening remarks", "graduation", "community", "welcoming"]
 MACRO_KEYWORDS = ["inflation", "rates", "cpi", "fomc", "labor", "employment", "policy", "yield"]
@@ -26,7 +27,15 @@ def scrape_speech_text(url):
         soup = BeautifulSoup(response.content, 'html.parser')
         date_tag = soup.find('p', class_='article__time')
         if date_tag:
-            speech_date = date_tag.get_text(strip=True)
+            raw_date = date_tag.get_text(strip=True)
+            try:
+                # Step 1: Tell Python to read "May 14, 2026" as a real date
+                parsed_date = datetime.strptime(raw_date, "%B %d, %Y")
+                # Step 2: Tell Python to rewrite it with the Day of the Week ("%A")
+                speech_date = parsed_date.strftime("%A, %B %d, %Y")
+            except ValueError:
+                # Fallback: If the Fed writes a weird format we didn't expect, just print the raw text
+                speech_date = raw_date
         else:
             speech_date = "Date not provided"
         paragraphs = soup.find_all('p')
