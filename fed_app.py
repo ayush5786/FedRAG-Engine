@@ -63,18 +63,27 @@ if st.button("Extract Signal") and query:
         if "error" in result:
             st.error(result["error"])
         else:
-            # 3. Validate Hallucination via Set Theory
-            overlap = hallucination_check(result.get("exact_quote", ""), combined_context)
+            exact_quote = result.get("exact_quote", "")
+            signal = result.get("signal", "")
             
-            if overlap < 0.90:
-                st.error(f"🚨 Hallucination Blocked! The LLM generated a quote with only {overlap*100:.1f}% mathematical overlap with the source data.")
-            else:
-                # 4. Render output
-                st.success("Signal Extracted Successfully")
+            # --- THE FIX: Bypass the safety net if it's Out of Scope ---
+            if signal == "Out of Scope" or exact_quote.upper() == "N/A":
+                st.info("ℹ️ Query is out of scope based on recent data. No hallucination check required.")
                 st.json(result)
+            else:
+                # 3. Validate Hallucination via Set Theory
+                overlap = hallucination_check(exact_quote, combined_context)
                 
-                # Traceability Expander
-                with st.expander("🔍 View Source Evidence (Top-3 Chunks)"):
-                    st.write("The AI generated this JSON using exclusively the following vectors:")
-                    for i, chunk in enumerate(top_chunks):
-                        st.info(f"**Chunk {i+1}:** {chunk}")
+                if overlap < 0.90:
+                    st.error(f"🚨 Hallucination Blocked! The LLM generated a quote with only {overlap*100:.1f}% mathematical overlap with the source data.")
+                else:
+                    # 4. Render output
+                    st.success("✅ Signal Extracted Successfully")
+                    st.json(result)
+                    
+                    # Traceability Expander
+                    with st.expander("🔍 View Source Evidence (Top-3 Chunks)"):
+                        st.write("The AI generated this JSON using exclusively the following vectors:")
+                        for i, chunk in enumerate(top_chunks):
+                            st.info(f"**Chunk {i+1}:** {chunk}")
+       
