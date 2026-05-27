@@ -2,7 +2,9 @@ streamlit
 feedparser
 beautifulsoup4
 requests
+torch
+torchvision
 sentence-transformers
 faiss-cpu
-numpy
 groq
+numpy
