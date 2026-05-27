@@ -58,11 +58,19 @@ with st.sidebar:
     st.header("📚 Active Data Context")
     st.caption("These speeches passed the macroeconomic filter and are powering the AI:")
     for i, speech in enumerate(speeches):
-        st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})")
+        # We added the date in italics right below the clickable title
+        st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})  \n*{speech.get('date', 'Unknown Date')}*")
 
 # --- UI INTERACTION ---
 query = st.text_input("Ask a macro question (e.g., 'What is the stance on inflation?'):")
 
+# Initialize persistent memory if it doesn't exist yet
+if "api_output" not in st.session_state:
+    st.session_state.api_output = None
+    st.session_state.combined_context = None
+    st.session_state.top_chunks = None
+    
+# Phase 1: The Button (Calculate & Save)
 if st.button("Extract Signal") and query:
     with st.spinner("Retrieving semantic chunks & generating signal..."):
         # 1. Retrieve
@@ -72,30 +80,41 @@ if st.button("Extract Signal") and query:
         # 2. Generate
         result = generate_macro_signal(query, top_chunks, api_key)
         
-        if "error" in result:
-            st.error(result["error"])
+        # 3. Save to Persistent Memory (NO UI RENDERING HERE!)
+        st.session_state.api_output = result
+        st.session_state.combined_context = combined_context
+        st.session_state.top_chunks = top_chunks
+
+# Phase 2: The Render (Read & Display)
+# Because this is outside the button, it stays visible even if the user changes tabs!
+if st.session_state.api_output is not None:
+    result = st.session_state.api_output
+    combined_context = st.session_state.combined_context
+    top_chunks = st.session_state.top_chunks
+    
+    if "error" in result:
+        st.error(result["error"])
+    else:
+        exact_quote = result.get("exact_quote", "")
+        signal = result.get("signal", "")
+        
+        # --- Bypass the safety net if it's Out of Scope ---
+        if signal == "Out of Scope" or exact_quote.upper() == "N/A":
+            st.info("ℹ️ Query is out of scope based on recent data. No hallucination check required.")
+            st.json(result)
         else:
-            exact_quote = result.get("exact_quote", "")
-            signal = result.get("signal", "")
+            # 3. Validate Hallucination via Set Theory
+            overlap = hallucination_check(exact_quote, combined_context)
             
-            # --- THE FIX: Bypass the safety net if it's Out of Scope ---
-            if signal == "Out of Scope" or exact_quote.upper() == "N/A":
-                st.info("ℹ️ Query is out of scope based on recent data. No hallucination check required.")
-                st.json(result)
+            if overlap < 0.90:
+                st.error(f"🚨 Hallucination Blocked! The LLM generated a quote with only {overlap*100:.1f}% mathematical overlap with the source data.")
             else:
-                # 3. Validate Hallucination via Set Theory
-                overlap = hallucination_check(exact_quote, combined_context)
+                # 4. Render output
+                st.success("✅ Signal Extracted Successfully")
+                st.json(result)
                 
-                if overlap < 0.90:
-                    st.error(f"🚨 Hallucination Blocked! The LLM generated a quote with only {overlap*100:.1f}% mathematical overlap with the source data.")
-                else:
-                    # 4. Render output
-                    st.success("✅ Signal Extracted Successfully")
-                    st.json(result)
-                    
-                    # Traceability Expander
-                    with st.expander("🔍 View Source Evidence (Top-3 Chunks)"):
-                        st.write("The AI generated this JSON using exclusively the following vectors:")
-                        for i, chunk in enumerate(top_chunks):
-                            st.info(f"**Chunk {i+1}:** {chunk}")
-       
+                # Traceability Expander
+                with st.expander("🔍 View Source Evidence (Top-3 Chunks)"):
+                    st.write("The AI generated this JSON using exclusively the following vectors:")
+                    for i, chunk in enumerate(top_chunks):
+                        st.info(f"**Chunk {i+1}:** {chunk}")
