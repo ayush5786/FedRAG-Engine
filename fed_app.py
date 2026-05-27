@@ -7,11 +7,19 @@ st.set_page_config(page_title="FedRAG Engine", page_icon="🏦", layout="centere
 st.title("🏦 FedRAG Engine")
 st.subheader("Deterministic Macroeconomic Signal Extraction")
 
-# Handle Secrets securely
+# Handle Secrets securely with a Sidebar fallback
 api_key = st.secrets.get("GROQ_API_KEY")
-if not api_key:
-    st.error("Missing GROQ_API_KEY in Streamlit Secrets.")
-    st.stop()
+
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    if not api_key:
+        st.info("No system API key found. Please provide your own to test the app.")
+        api_key = st.text_input("Enter your Groq API Key:", type="password")
+        if not api_key:
+            st.warning("Please enter your API key to proceed.")
+            st.stop()
+    else:
+        st.success("API key securely loaded from server environment.")
 
 # --- CACHE 1: Data Ingestion (TTL = 1 hour) ---
 @st.cache_data(ttl=3600)
