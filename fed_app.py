@@ -31,7 +31,7 @@ with st.sidebar:
 @st.cache_data(ttl=3600)
 def get_clean_data(max_speeches):
     rss_url = "https://www.federalreserve.gov/feeds/speeches.xml"
-    return fetch_valid_speeches(rss_url, max_speeches_to_check=max_speeches)
+    return fetch_valid_speeches(rss_url, target_valid_speeches=max_speeches)
 
 @st.cache_resource(ttl=3600)
 def init_vector_db(_speeches):
