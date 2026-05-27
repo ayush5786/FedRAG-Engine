@@ -18,7 +18,7 @@ with st.sidebar:
             st.warning("Please enter your API key to proceed.")
             st.stop()
     else:
-        st.success("API key securely loaded.")
+        st.success("API key securely loaded from server environment.")
 
     st.divider()
     
