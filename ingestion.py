@@ -30,19 +30,28 @@ def scrape_speech_text(url):
         print(f"Error scraping {url}: {e}")
         return ""
 
-def fetch_valid_speeches(rss_url, max_speeches_to_check=5):
+def fetch_valid_speeches(rss_url, target_valid_speeches=5):
     feed = feedparser.parse(rss_url)
     valid_speeches = []
     
-    for entry in feed.entries[:max_speeches_to_check]:
+    # Track our position in the RSS feed
+    entry_index = 0
+    total_entries = len(feed.entries)
+    
+    # Keep scraping until we have exactly what we need (or we run out of speeches)
+    while len(valid_speeches) < target_valid_speeches and entry_index < total_entries:
+        entry = feed.entries[entry_index]
+        entry_index += 1  # Move to the next speech for the next loop
+        
         title = entry.title
         link = entry.link
         
+        # Stage 1: Fast Filter
         if metadata_filter(title) == "DROP":
             continue
             
+        # Stage 2: Smart Filter
         speech_text = scrape_speech_text(link)
-        
         if keyword_bouncer(speech_text):
             valid_speeches.append({
                 "title": title,
