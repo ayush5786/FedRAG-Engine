@@ -7,57 +7,58 @@ st.set_page_config(page_title="FedRAG Engine", page_icon="🏦", layout="centere
 st.title("🏦 FedRAG Engine")
 st.subheader("Deterministic Macroeconomic Signal Extraction")
 
-# Handle Secrets securely with a Sidebar fallback
-api_key = st.secrets.get("GROQ_API_KEY")
-
+# --- 1. SIDEBAR: Config & Transparency ---
 with st.sidebar:
     st.header("⚙️ Configuration")
+    api_key = st.secrets.get("GROQ_API_KEY")
     if not api_key:
-        st.info("No system API key found. Please provide your own to test the app.")
+        st.info("No system API key found. Please provide your own.")
         api_key = st.text_input("Enter your Groq API Key:", type="password")
         if not api_key:
             st.warning("Please enter your API key to proceed.")
             st.stop()
     else:
-        st.success("API key securely loaded from server environment.")
+        st.success("API key securely loaded.")
 
-with st.sidebar:
-    st.header("📚 Active Data Context")
-    st.caption("These speeches passed the macroeconomic filter and are currently loaded in the database:")
+    st.divider()
     
-    if 'speeches' in locals() and speeches:
-        for i, speech in enumerate(speeches):
-            # Creates a clickable link for each speech title
-            st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})")
-    else:
-        st.write("No speeches loaded.")
+    st.header("🎛️ Database Settings")
+    # THE SLIDER: Lets the user choose how many speeches to analyze
+    num_speeches = st.slider("Recent Speeches to Analyze", min_value=1, max_value=10, value=5)
 
-# --- CACHE 1: Data Ingestion (TTL = 1 hour) ---
+# --- 2. CACHE & DATA LOAD (Dynamic based on Slider) ---
+# Notice we pass 'max_speeches' into the function now!
 @st.cache_data(ttl=3600)
-def get_clean_data():
+def get_clean_data(max_speeches):
     rss_url = "https://www.federalreserve.gov/feeds/speeches.xml"
-    return fetch_valid_speeches(rss_url, max_speeches_to_check=5)
+    return fetch_valid_speeches(rss_url, max_speeches_to_check=max_speeches)
 
-# --- CACHE 2: Vector DB Build (TTL = 1 hour) ---
 @st.cache_resource(ttl=3600)
 def init_vector_db(_speeches):
     all_chunks = []
     for s in _speeches:
         all_chunks.extend(semantic_chunking(s['text']))
-    
     if not all_chunks:
         return None, None
-        
     return build_faiss_index(all_chunks)
 
-# Execute Data & DB Load
-with st.spinner("Syncing live data from Federal Reserve..."):
-    speeches = get_clean_data()
+# Execute Data & DB Load using the slider value
+with st.spinner(f"Syncing top {num_speeches} speeches from the Fed..."):
+    speeches = get_clean_data(num_speeches)
     index, chunks = init_vector_db(speeches)
 
 if not index:
     st.warning("No macroeconomic data passed the ingestion filters today.")
     st.stop()
+
+# --- 3. SIDEBAR: Transparency UI ---
+# Now that 'speeches' is loaded, we print them in the sidebar
+with st.sidebar:
+    st.divider()
+    st.header("📚 Active Data Context")
+    st.caption("These speeches passed the macroeconomic filter and are powering the AI:")
+    for i, speech in enumerate(speeches):
+        st.markdown(f"**{i+1}.** [{speech['title']}]({speech['url']})")
 
 # --- UI INTERACTION ---
 query = st.text_input("Ask a macro question (e.g., 'What is the stance on inflation?'):")
