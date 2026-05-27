@@ -65,7 +65,8 @@ def generate_macro_signal(query, retrieved_chunks, api_key):
     """Passes context to Llama-3.3-70B using a strict JSON format and Macro Rubric."""
     client = Groq(api_key=api_key)
     context = "\n\n---\n\n".join(retrieved_chunks)
-    
+
+
     system_prompt = """
     You are an expert Quantitative Analyst. Analyze the Federal Reserve text and answer the user's query.
     You must output ONLY valid JSON.
@@ -80,11 +81,12 @@ def generate_macro_signal(query, retrieved_chunks, api_key):
     
     JSON SCHEMA:
     {
-        "signal": "Strongly Hawkish | Moderately Hawkish | Neutral | Moderately Dovish | Strongly Dovish",
+        "signal": "Strongly Hawkish | Moderately Hawkish | Neutral | Moderately Dovish | Strongly Dovish | Out of Scope",
         "rationale": "A 2-sentence explanation of the stance.",
-        "exact_quote": "A specific quote extracted verbatim from the text that proves your signal."
+        "exact_quote": "A specific quote extracted verbatim from the text that proves your signal. If the signal is Out of Scope, set this exactly to 'N/A'."
     }
     """
+    
     
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
