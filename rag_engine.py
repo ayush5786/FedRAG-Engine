@@ -61,48 +61,92 @@ def hallucination_check(llm_quote, retrieved_text):
     overlap_percentage = len(intersection) / len(quote_set)
     return overlap_percentage
 
-def generate_macro_signal(query, retrieved_chunks, api_key):
-    """Passes context to Llama-3.3-70B using a strict JSON format and Macro Rubric."""
-    client = Groq(api_key=api_key)
-    context = "\n\n---\n\n".join(retrieved_chunks)
-
-
-    system_prompt = """
-    You are an expert Quantitative Analyst. Analyze the Federal Reserve text and answer the user's query.
-    You must output ONLY valid JSON.
-
-    CRITICAL BOUNDARY RULE:
-    You are strictly limited to United States macroeconomic policy. If the user's query or the provided text focuses on global metrics, foreign economies, or anything not explicitly tied to US inflation or US interest rates, you MUST classify it as "Out of Scope". Do not attempt to answer questions about global inflation.
-
-    MACROECONOMIC RUBRIC:
-    - Strongly Hawkish: Explicit plans to raise US rates or strict US inflation warnings.
-    - Moderately Hawkish: Leaning toward restrictive US policy, but data-dependent.
-    - Neutral: Balanced risks, maintaining current US rate levels.
-    - Moderately Dovish: Leaning toward US rate cuts, acknowledging economic slowing.
-    - Strongly Dovish: Explicit plans to cut US rates or inject liquidity.
-    - Out of Scope: The query asks about global/foreign metrics, OR the provided context lacks explicit info to answer a US-centric query.
-    
-    JSON SCHEMA:
-    {
-        "signal": "Strongly Hawkish | Moderately Hawkish | Neutral | Moderately Dovish | Strongly Dovish | Out of Scope",
-        "rationale": "A 2-sentence explanation of the stance. If Out of Scope, explain why it violates the boundary rule.",
-        "exact_quote": "A specific quote extracted verbatim from the text that proves your signal. If the signal is Out of Scope, set this exactly to 'N/A'."
-    }
+def auto_route_speeches(query, speech_pool, api_key, top_n=3):
     """
-
+    Analyzes speech headlines against the user's query using a fast LLM call
+    to automatically select the most relevant documents.
+    """
+    from groq import Groq
+    import json
     
+    client = Groq(api_key=api_key)
     
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuery: {query}"}
-        ],
-        temperature=0.1,
-        response_format={"type": "json_object"}
-    )
+    # Format the pool into a clean directory for the LLM to read
+    directory = [{"id": i, "title": s["title"], "date": s["date"]} for i, s in enumerate(speech_pool)]
+    
+    system_prompt = f"""
+    You are an advanced document routing agent. Your job is to analyze a user's macroeconomic query and select the top {top_n} most relevant Federal Reserve speeches from the provided directory based ONLY on their titles and dates.
+    
+    Return a strictly formatted JSON object containing an array of the selected speech IDs:
+    {{
+        "selected_ids": [0, 2, 5]
+    }}
+    If absolutely no speeches match the topic, return an empty array. Do not return markdown blocks or prose.
+    """
+    
+    user_prompt = f"User Query: {query}\n\nSpeech Directory:\n{json.dumps(directory)}"
     
     try:
-        return json.loads(response.choices[0].message.content)
-    except:
-        return {"error": "Failed to generate valid JSON"}
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        result = json.loads(response.choices[0].message.content.strip())
+        return result.get("selected_ids", [])
+    except Exception as e:
+        print(f"Routing error: {e}")
+        return []
+
+def generate_general_semantic_signal(query, context_chunks, api_key):
+    """
+    Dynamically analyzes the text cohort against the user's custom query,
+    forcing a native JSON response format from Groq.
+    """
+    client = Groq(api_key=api_key)
+    combined_context = "\n\n".join(context_chunks)
+    
+    system_prompt = """
+    You are an elite central bank research analyst. Your job is to extract explicit thematic signals from Federal Reserve transcripts based strictly on the user's query.
+
+    You must respond with a strictly formatted JSON object matching this schema exactly. Do not output any conversational prose or markdown formatting outside of the JSON object.
+    {
+        "theme": "The core topic identified from the user's query (e.g., AI Expansion, Trade Relations, Inflation, etc.)",
+        "stance": "The Fed speaker's precise stance/sentiment on this theme. Must be exactly one of: [Positive/Accommodative, Neutral/Balanced, Negative/Restrictive, Out of Scope]",
+        "rationale": "A concise, 2-3 sentence economic analysis explaining WHY the speaker holds this stance, based ONLY on the text.",
+        "exact_quote": "The exact, verbatim sentence from the text that proves this stance. If the text genuinely does not discuss the user's topic, output 'N/A'."
+    }
+
+    CRITICAL RULES:
+    1. Evaluate the stance strictly on the theme requested.
+    2. Do not hallucinate. If the text lacks explicit information to answer the query, set stance to 'Out of Scope' and exact_quote to 'N/A'.
+    """
+    
+    user_prompt = f"""
+    User Query: {query}
+    
+    Provided Speech Context:
+    {combined_context}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            # This completely solves formatting bugs by forcing a structured JSON output
+            response_format={"type": "json_object"} 
+        )
+        
+        raw_content = response.choices[0].message.content.strip()
+        return json.loads(raw_content)
+        
+    except Exception as e:
+        return {"error": f"Failed to parse signal: {str(e)}"}
