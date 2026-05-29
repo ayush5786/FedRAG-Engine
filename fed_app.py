@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 from groq import Groq
 from ingestion import fetch_speech_list, scrape_speech_text
 from rag_engine import (
@@ -27,8 +28,24 @@ with st.sidebar:
     st.divider()
     
     st.header("🎛️ Database Pool")
-    # Kept default at 15, maxing out at 50
     num_speeches = st.slider("Recent Speeches to Scan", min_value=5, max_value=50, value=15)
+
+    st.sidebar.divider()
+    st.sidebar.markdown("### 🧠 AI Engine Selection")
+    model_choice = st.sidebar.selectbox(
+        "Choose Extraction Model:",
+        options=[
+            "Llama 3.3 70B (Deep Reasoning, Strict Limits)", 
+            "Llama 4 Scout 17B (Balanced, High Limits)"
+        ],
+        help="If you receive a 'Rate Limit' error, switch to the 17B model for higher daily token allowances."
+    )
+    
+    # Map the UI choice to the actual Groq model ID
+    if "70B" in model_choice:
+        selected_model = "llama-3.3-70b-versatile"
+    else:
+        selected_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # --- 2. FETCH HEADLINES ONLY (Instant) ---
 @st.cache_data(ttl=3600)
@@ -55,13 +72,22 @@ def lazy_load_and_index_cohort(urls):
     return build_faiss_index(combined_chunks)
 
 # --- 4. MAIN INTERACTION UI ---
-query = st.text_input("Ask any thematic macro question (e.g., 'What is the outlook on AI productivity?'):")
+st.markdown("Ask any thematic macro question (e.g., 'What is the outlook on AI productivity?'):")
+# Use columns to put the text box and button side-by-side
+col1, col2 = st.columns([6, 1])
+with col1:
+    query = st.text_input("query", label_visibility="collapsed")
+with col2:
+    submit_btn = st.button("Enter ↵", use_container_width=True, type="primary")
 
 # Core Execution Block
-if query:
+if submit_btn or query:
     # STEP A: Auto-Route and Select Speeches matching the query
     with st.spinner("Analyzing directory to isolate relevant speeches..."):
         selected_ids = auto_route_speeches(query, speech_pool, api_key, top_n=3)
+        if selected_ids is None:
+            st.error("🚨 **Groq API Connection / Rate Limit Issue:** The system could not complete the routing request. Please wait a moment and try refreshing your query.")
+            st.stop() 
         selected_metas = [speech_pool[i] for i in selected_ids if i < len(speech_pool)]
         
     # ====================================================================
@@ -77,21 +103,18 @@ if query:
         if num_speeches < 50:
             st.write("### 💡 Choose what would you like to do next:")
             
-            # Modern side-by-side dashboard split
             col1, col2 = st.columns(2)
             
             with col1:
                 with st.container(border=True):
                     st.markdown("#### 👈 Option 1: Expand Horizon")
                     st.write("Increase **'Recent Speeches to Scan'** on the sidebar to sift deeper into historical central bank remarks.")
-                    # Empty space to visually balance the button in col2
                     st.write("") 
                     
             with col2:
                 with st.container(border=True):
                     st.markdown("#### ✨ Option 2: Macro Pivot")
                     st.write("Stay on this current timeline window and pivot to extract what the Fed is actually prioritizing instead.")
-                    # Custom styled block width button to look uniform
                     if st.button("Run Executive Briefing", use_container_width=True, type="primary"):
                         trigger_briefing = True
                         
@@ -125,7 +148,7 @@ if query:
                     
                     try:
                         brief_response = client.chat.completions.create(
-                            model="llama-3.3-70b-versatile",
+                            model=selected_model,
                             messages=[{"role": "user", "content": briefing_prompt}],
                             temperature=0.2
                         )
@@ -138,7 +161,7 @@ if query:
                 else:
                     st.error("Fallback scraping returned no readable document text chunks to analyze.")
                     
-        st.stop() # Soft lock execution here so the downstream RAG stack doesn't trigger
+        st.stop() 
     # ====================================================================
         
     # Display the auto-selected cohort to the user dynamically
@@ -159,11 +182,52 @@ if query:
     with st.spinner("Extracting semantic insights..."):
         top_chunks = retrieve_top_k(query, index, chunks, k=3)
         combined_context = " ".join(top_chunks)
-        result = generate_general_semantic_signal(query, top_chunks, api_key)
+        result = generate_general_semantic_signal(query, top_chunks, api_key, model_name=selected_model)
         
-    # STEP D: Render Output Data
+    # ====================================================================
+    # 🎨 STEP D: Render Output Data (With Polished Error Handling)
+    # ====================================================================
     if "error" in result:
-        st.error(result["error"])
+        error_msg = result["error"]
+        
+        # Check if it's a standard Groq Rate Limit (429)
+        # Check if it's a standard Groq Rate Limit (429)
+        if "429" in error_msg or "rate_limit_exceeded" in error_msg:
+            
+            # Extract the wait time and strip out the ugly decimals
+            wait_time_match = re.search(r"try again in ([0-9a-zA-Z.]+)", error_msg)
+            if wait_time_match:
+                raw_time = wait_time_match.group(1) # e.g., "10m46.271999999s"
+                clean_time = re.sub(r'\.\d+', '', raw_time) # Removes .271999999
+                wait_info = f"**{clean_time}**"
+            else:
+                wait_info = "a few minutes"
+            
+            # 1. The Title (Centered and Streamlit Red)
+            st.markdown(
+                "<h3 style='text-align: center; color: #ff4b4b;'>🛑 70B Model Limit Reached</h3>", 
+                unsafe_allow_html=True
+            )
+            
+            # 2. The Standard Text Underneath (Not Red)
+            st.markdown(f"""
+            You have exhausted your daily free-tier token allocation for the heavy **Llama 3.3 70B** model. 
+            
+            ⏳ **Rolling Limit Warning:** You will regain enough capacity to run *one more query* in {wait_info}. However, your full daily allowance will not completely reset until midnight UTC.
+            
+            ---
+            
+            #### 💡 How to keep testing right now:
+            Switch the **AI Engine Selection** dropdown on the left sidebar to **Llama 4 Scout 17B (Balanced, High Limits)**. 
+            It has a much higher daily token allowance and will process your query instantly!
+            """)
+
+
+        else:
+            # Fallback for any other unexpected API errors
+            st.error("### 🚨 Extraction Pipeline Snag")
+            st.code(error_msg, language="bash")
+            
     else:
         theme = result.get("theme", "N/A")
         stance = result.get("stance", "Out of Scope")
@@ -179,7 +243,6 @@ if query:
             else:
                 st.success(f"✅ Target Insights Extracted Successfully")
                 
-                # --- Polished Text Headers ---
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown("##### 🏷️ Extracted Theme")
@@ -187,13 +250,12 @@ if query:
                 with col2:
                     st.markdown("##### ⚖️ Calculated Stance")
                     
-                    # Clean, exact matching for your specific terms
                     if "Negative" in stance or "Restrictive" in stance:
                         stance_color = "🔴"
                     elif "Positive" in stance or "Accommodative" in stance:
                         stance_color = "🟢"
                     else:
-                        stance_color = "⚪" # Used for Neutral/Balanced or Out of Scope
+                        stance_color = "⚪" 
                         
                     st.markdown(f"### {stance_color} **{stance}**")
                 
@@ -201,9 +263,9 @@ if query:
                     
                 st.markdown("#### 🧠 AI Rationale")
                 st.write(result.get("rationale", "No rationale provided."))
-
-                st.write('')
                 
+                st.write('')
+
                 st.markdown("#### 📝 Verbatim Quote")
                 quote = result.get('exact_quote', 'No quote found.')
                 st.markdown(f"> *\"{quote}\"*")
