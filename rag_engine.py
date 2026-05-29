@@ -63,32 +63,40 @@ def hallucination_check(llm_quote, retrieved_text):
 
 def auto_route_speeches(query, speech_pool, api_key, top_n=3):
     """
-    Analyzes speech headlines against the user's query using a fast LLM call
-    to automatically select the most relevant documents.
+    Analyzes speech headlines AND RSS content summaries against the user's query 
+    using a fast LLM call to automatically select the most relevant documents.
     """
-    from groq import Groq
-    import json
     
     client = Groq(api_key=api_key)
     
-    # Format the pool into a clean directory for the LLM to read
-    directory = [{"id": i, "title": s["title"], "date": s["date"]} for i, s in enumerate(speech_pool)]
+    # Format the pool into a clean directory, now passing the rich 'summary' context
+    directory = [
+        {
+            "id": i, 
+            "title": s["title"], 
+            "date": s["date"],
+            "summary_context": s.get("summary", "No summary available.")
+        } 
+        for i, s in enumerate(speech_pool)
+    ]
     
     system_prompt = f"""
-    You are an advanced document routing agent. Your job is to analyze a user's macroeconomic query and select the top {top_n} most relevant Federal Reserve speeches from the provided directory based ONLY on their titles and dates.
+    You are an advanced document routing agent. Your job is to analyze a user's macroeconomic query and select the top {top_n} most relevant Federal Reserve speeches from the provided directory.
+    
+    Use the speech title, date, AND the 'summary_context' block to make your determination. The 'summary_context' explains the actual themes of the speech, allowing you to route accurately even if the title is generic or ambiguous.
     
     Return a strictly formatted JSON object containing an array of the selected speech IDs:
     {{
         "selected_ids": [0, 2, 5]
     }}
-    If absolutely no speeches match the topic, return an empty array. Do not return markdown blocks or prose.
+    If absolutely no speeches match the topic, return an empty array. Do not return markdown blocks or prose. Always frame your answer by explicitly stating 'According to recent Federal Reserve remarks...'
     """
     
     user_prompt = f"User Query: {query}\n\nSpeech Directory:\n{json.dumps(directory)}"
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -100,53 +108,52 @@ def auto_route_speeches(query, speech_pool, api_key, top_n=3):
         return result.get("selected_ids", [])
     except Exception as e:
         print(f"Routing error: {e}")
-        return []
+        return None
 
-def generate_general_semantic_signal(query, context_chunks, api_key):
+def generate_general_semantic_signal(query, retrieved_chunks, api_key, model_name="llama-3.3-70b-versatile"):
     """
-    Dynamically analyzes the text cohort against the user's custom query,
-    forcing a native JSON response format from Groq.
+    Executes the heavy macroeconomic text extraction. 
+    Accepts a dynamic model_name from the UI to safely handle free-tier limit fallbacks.
     """
+    from groq import Groq
+    import json
+    
     client = Groq(api_key=api_key)
-    combined_context = "\n\n".join(context_chunks)
+    
+    # Combine the top text chunks into a unified context payload
+    context_block = "\n\n".join([f"[Source Chunk]: {chunk}" for chunk in retrieved_chunks])
     
     system_prompt = """
-    You are an elite central bank research analyst. Your job is to extract explicit thematic signals from Federal Reserve transcripts based strictly on the user's query.
-
-    You must respond with a strictly formatted JSON object matching this schema exactly. Do not output any conversational prose or markdown formatting outside of the JSON object.
+    You are an expert macroeconomic analyst. Your task is to evaluate the provided Federal Reserve speech contexts against the user's query.
+    
+    You must extract:
+    1. The core theme discussed.
+    2. The calculated monetary policy stance. Strict allowed values: 'Positive/Accommodative' or 'Negative/Restrictive'.
+    3. An analytical rationale formatted as a single, well-written, and professional paragraph (do NOT use bullet points).
+    4. An exact, full-length verbatim quote (at most 2 to 3 full sentences) directly from the text that deeply supports your analysis. Do not truncate the quote.
+    
+    Return a strictly formatted JSON object:
     {
-        "theme": "The core topic identified from the user's query (e.g., AI Expansion, Trade Relations, Inflation, etc.)",
-        "stance": "The Fed speaker's precise stance/sentiment on this theme. Must be exactly one of: [Positive/Accommodative, Neutral/Balanced, Negative/Restrictive, Out of Scope]",
-        "rationale": "A concise, 2-3 sentence economic analysis explaining WHY the speaker holds this stance, based ONLY on the text.",
-        "exact_quote": "The exact, verbatim sentence from the text that proves this stance. If the text genuinely does not discuss the user's topic, output 'N/A'."
+        "theme": "Inflation",
+        "stance": "Negative/Restrictive",
+        "rationale": "A single narrative paragraph breaking down the central bank speaker's analytical stance and underlying economic concerns without any lists or bullet points.",
+        "exact_quote": "A long, multi-sentence verbatim extraction from the source text that provides deep context. It should be at least two full sentences."
     }
-
-    CRITICAL RULES:
-    1. Evaluate the stance strictly on the theme requested.
-    2. Do not hallucinate. If the text lacks explicit information to answer the query, set stance to 'Out of Scope' and exact_quote to 'N/A'.
     """
     
-    user_prompt = f"""
-    User Query: {query}
-    
-    Provided Speech Context:
-    {combined_context}
-    """
+    user_prompt = f"User Query: {query}\n\nRetrieved Context Documents:\n{context_block}"
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=model_name,  # Dynamically passed from the Streamlit frontend dropdown
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.0,
-            # This completely solves formatting bugs by forcing a structured JSON output
-            response_format={"type": "json_object"} 
+            temperature=0.1,
+            response_format={"type": "json_object"}
         )
-        
-        raw_content = response.choices[0].message.content.strip()
-        return json.loads(raw_content)
-        
+        return json.loads(response.choices[0].message.content.strip())
     except Exception as e:
-        return {"error": f"Failed to parse signal: {str(e)}"}
+        print(f"Extraction error: {e}")
+        return {"error": str(e)}
