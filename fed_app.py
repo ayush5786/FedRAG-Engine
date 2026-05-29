@@ -179,17 +179,34 @@ if query:
             else:
                 st.success(f"✅ Target Insights Extracted Successfully")
                 
+                # --- Polished Text Headers ---
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric(label="Extracted Theme", value=theme)
+                    st.markdown("##### 🏷️ Extracted Theme")
+                    st.markdown(f"### **{theme}**")
                 with col2:
-                    st.metric(label="Calculated Stance", value=stance)
+                    st.markdown("##### ⚖️ Calculated Stance")
                     
-                st.markdown("### 🧠 AI Rationale")
-                st.write(result.get("rationale", "No rationale provided."))
+                    # Clean, exact matching for your specific terms
+                    if "Negative" in stance or "Restrictive" in stance:
+                        stance_color = "🔴"
+                    elif "Positive" in stance or "Accommodative" in stance:
+                        stance_color = "🟢"
+                    else:
+                        stance_color = "⚪" # Used for Neutral/Balanced or Out of Scope
+                        
+                    st.markdown(f"### {stance_color} **{stance}**")
                 
-                st.markdown("### 📝 Verbatim Quote")
-                st.info(f"*{result.get('exact_quote', 'No quote found.')}*")
+                st.divider()
+                    
+                st.markdown("#### 🧠 AI Rationale")
+                st.write(result.get("rationale", "No rationale provided."))
+
+                st.write('')
+                
+                st.markdown("#### 📝 Verbatim Quote")
+                quote = result.get('exact_quote', 'No quote found.')
+                st.markdown(f"> *\"{quote}\"*")
                 
                 st.divider()
                 
