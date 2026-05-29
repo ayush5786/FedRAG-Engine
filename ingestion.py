@@ -46,7 +46,7 @@ def scrape_speech_text(url):
         return "", "Date not provided."
 
 def fetch_speech_list(rss_url, target_speeches=10):
-    """Fast RSS metadata fetch. Zero scraping happens here."""
+    """Fast RSS metadata fetch. Extracts both titles and descriptions for smart routing."""
     feed = feedparser.parse(rss_url)
     speech_metadata_list = []
     
@@ -56,6 +56,11 @@ def fetch_speech_list(rss_url, target_speeches=10):
             
         title = entry.title
         link = entry.link
+        
+        # Pulling the RSS description summary if it exists
+        summary = entry.summary if hasattr(entry, 'summary') else ""
+        # Clean up any residual HTML or excessive whitespace from the RSS tag
+        clean_summary = " ".join(summary.split())[:300] # Limiting to 300 characters for tight context
         
         # Stage 1: Fast Title Filter (No network requests)
         if metadata_filter(title) == "DROP":
@@ -69,7 +74,8 @@ def fetch_speech_list(rss_url, target_speeches=10):
         speech_metadata_list.append({
             "title": title,
             "url": link,
-            "date": clean_date
+            "date": clean_date,
+            "summary": clean_summary if clean_summary else "No summary description available."
         })
         
     return speech_metadata_list
