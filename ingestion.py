@@ -45,45 +45,31 @@ def scrape_speech_text(url):
         print(f"Error scraping {url}: {e}")
         return "", "Date not provided."
 
-def fetch_valid_speeches(rss_url, target_valid_speeches=5):
+def fetch_speech_list(rss_url, target_speeches=10):
+    """Fast RSS metadata fetch. Zero scraping happens here."""
     feed = feedparser.parse(rss_url)
-    valid_speeches = []
+    speech_metadata_list = []
     
-    # Track our position in the RSS feed
-    entry_index = 0
-    total_entries = len(feed.entries)
-    
-    # Keep scraping until we have exactly what we need (or we run out of speeches)
-    while len(valid_speeches) < target_valid_speeches and entry_index < total_entries:
-        entry = feed.entries[entry_index]
-        entry_index += 1  
-        
+    for entry in feed.entries:
+        if len(speech_metadata_list) >= target_speeches:
+            break
+            
         title = entry.title
         link = entry.link
-
-        # --- THE FIX: Robust Date Extraction ---
-        # Check 'published' first, then 'updated', then fallback.
-        # Check every possible XML date tag format
-        # --- THE ULTIMATE DATE FIX ---
-        # This sits right after we grab the title/link, and before the filters!
-        if hasattr(entry, 'published_parsed') and entry.published_parsed:
-            # Forces clean "Month DD, YYYY" format (e.g., "May 27, 2026")
-            clean_date = time.strftime("%B %d, %Y", entry.published_parsed)
-        else:
-            clean_date = "Unknown Date"
         
-        # Stage 1: Fast Filter
+        # Stage 1: Fast Title Filter (No network requests)
         if metadata_filter(title) == "DROP":
             continue
             
-        # Stage 2: Smart Filter
-        speech_text, clean_date = scrape_speech_text(link)
-        if keyword_bouncer(speech_text):
-            valid_speeches.append({
-                "title": title,
-                "url": link,
-                "text": speech_text,
-                "date": clean_date  # <-- We add the date to the payload!
-            })
+        if hasattr(entry, 'published_parsed') and entry.published_parsed:
+            clean_date = time.strftime("%B %d, %Y", entry.published_parsed)
+        else:
+            clean_date = "Unknown Date"
             
-    return valid_speeches
+        speech_metadata_list.append({
+            "title": title,
+            "url": link,
+            "date": clean_date
+        })
+        
+    return speech_metadata_list
