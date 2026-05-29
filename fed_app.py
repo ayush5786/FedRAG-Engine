@@ -185,10 +185,18 @@ if query:
                 with col2:
                     st.metric(label="Calculated Stance", value=stance)
                     
-                st.json(result)
+                st.markdown("### 🧠 AI Rationale")
+                st.write(result.get("rationale", "No rationale provided."))
+                
+                st.markdown("### 📝 Verbatim Quote")
+                st.info(f"*{result.get('exact_quote', 'No quote found.')}*")
+                
+                st.divider()
                 
                 with st.expander("🔍 View Source Evidence Vectors"):
                     for i, chunk in enumerate(top_chunks):
                         st.info(f"**Chunk {i+1}:** {chunk}")
+                with st.expander("⚙️ View Raw JSON Payload (Developer Mode)"):
+                    st.json(result)
 else:
     st.write("👈 Set your scanning window size in the sidebar and enter a question above to begin analysis.")
