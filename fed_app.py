@@ -213,7 +213,7 @@ if submit_btn or query:
             st.markdown(f"""
             You have exhausted your daily free-tier token allocation for the heavy **Llama 3.3 70B** model. 
             
-            ⏳ **Rolling Limit Warning:** You will regain enough capacity to run *one more query* in {wait_info}. However, your full daily allowance will not completely reset until midnight UTC.
+            ⏳ **Rolling Limit Warning:** You will regain enough capacity to run *one more query* in {wait_info} However, your full daily allowance will not completely reset until midnight UTC.
             
             ---
             
