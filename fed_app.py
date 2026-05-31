@@ -4,7 +4,7 @@ from groq import Groq
 from ingestion import fetch_speech_list, scrape_speech_text
 from rag_engine import (
     semantic_chunking, build_faiss_index, retrieve_top_k, 
-    hallucination_check, generate_general_semantic_signal, auto_route_speeches
+    hallucination_check, generate_general_semantic_signal
 )
 
 st.set_page_config(page_title="FedRAG Engine", page_icon="🏦", layout="centered")
@@ -72,60 +72,96 @@ def lazy_load_and_index_cohort(urls):
     return build_faiss_index(combined_chunks)
 
 # --- 4. MAIN INTERACTION UI ---
-st.markdown("Ask any thematic macro question (e.g., 'What is the outlook on AI productivity?'):")
+st.markdown("### 💬 Query the Engine")
+
+# Expandable hint box for new users
+with st.expander("💡 Not sure what to ask? Try one of these themes:"):
+    st.markdown("""
+    * **Inflation & Rates:** *"What is the current stance on sticky services inflation and rate cuts?"*
+    * **Geopolitics:** *"How are global trade tensions and tariffs impacting domestic supply chains?"*
+    * **Technology & Labor:** *"What are Fed governors saying about AI, automation, and labor productivity?"*
+    * **Housing:** *"What is the outlook on the commercial real estate sector and housing affordability?"*
+    """)
+
 # Use columns to put the text box and button side-by-side
-col1, col2 = st.columns([6, 1])
+col1, _ = st.columns([6, 1])    
 with col1:
-    query = st.text_input("query", label_visibility="collapsed")
-with col2:
-    submit_btn = st.button("Enter ↵", use_container_width=True, type="primary")
+    query = st.chat_input("Ask about inflation, AI, geopolitics, or labor...")
 
 # Core Execution Block
-if submit_btn or query:
-    # STEP A: Auto-Route and Select Speeches matching the query
-    with st.spinner("Analyzing directory to isolate relevant speeches..."):
-        selected_ids = auto_route_speeches(query, speech_pool, api_key, top_n=3)
-        if selected_ids is None:
-            st.error("🚨 **Groq API Connection / Rate Limit Issue:** The system could not complete the routing request. Please wait a moment and try refreshing your query.")
-            st.stop() 
-        selected_metas = [speech_pool[i] for i in selected_ids if i < len(speech_pool)]
+# The `query.strip()` ensures we don't accidentally run empty searches
+if (query) and query.strip():
+    
+    # STEP A: Vectorize EVERYTHING in your current slider horizon right away
+    with st.spinner("Scraping and building full vector index pool..."):
+        all_urls = tuple([meta['url'] for meta in speech_pool])
+        index, chunks = lazy_load_and_index_cohort(all_urls)
+        
+    if isinstance(index, str) or not index:
+        st.error("Could not process text data for the speech directory.")
+        st.stop()
+        
+    # STEP B: Let FAISS search the actual text transcripts mathematically
+    with st.spinner("Sifting through speech transcripts for semantic matches..."):
+        top_chunks = retrieve_top_k(query, index, chunks, k=3)
+        combined_context = " ".join(top_chunks)
+        
+    # Inform the user that the FAISS Pipeline successfully extracted matches
+    st.write(query)
+    st.info(f"🤖 **FAISS Pipeline Active:** Successfully isolated the top 3 contextual match-blocks from full transcripts.")
+
+    # STEP C: Directly extract insights using our top chunks context
+    with st.spinner("Extracting semantic insights..."):
+        result = generate_general_semantic_signal(query, top_chunks, api_key, model_name=selected_model)
         
     # ====================================================================
-    # 🔥 LIVE PRODUCTION FALLBACK SYSTEM (DASHBOARD CARD UPGRADE)
+    # 🎨 STEP D: Render Output Data & Handle Out-of-Scope Pivots
     # ====================================================================
-    if not selected_metas:
-        st.warning(f"🔍 No recent speeches explicitly match the theme of your question: **'{query}'**.")
-        st.divider()
+    if "error" in result:
+        error_msg = result["error"]
         
-        trigger_briefing = False
-        
-        # SCENARIO 1: User has room left to scroll/scan deeper
-        if num_speeches < 50:
-            st.write("### 💡 Choose what would you like to do next:")
+        # Check if it's a standard Groq Rate Limit (429)
+        if "429" in error_msg or "rate_limit_exceeded" in error_msg:
+            wait_time_match = re.search(r"try again in ([0-9a-zA-Z.]+)", error_msg)
+            if wait_time_match:
+                raw_time = wait_time_match.group(1)
+                clean_time = re.sub(r'\.\d+', '', raw_time)
+                wait_info = f"**{clean_time}**"
+            else:
+                wait_info = "a few minutes"
             
-            col1, col2 = st.columns(2)
+            st.markdown(
+                "<h3 style='text-align: center; color: #ff4b4b;'>🛑 70B Model Limit Reached</h3>", 
+                unsafe_allow_html=True
+            )
+            st.markdown(f"""
+            You have exhausted your daily free-tier token allocation for the heavy **Llama 3.3 70B** model. 
             
-            with col1:
-                with st.container(border=True):
-                    st.markdown("#### 👈 Option 1: Expand Horizon")
-                    st.write("Increase **'Recent Speeches to Scan'** on the sidebar to sift deeper into historical central bank remarks.")
-                    st.write("") 
-                    
-            with col2:
-                with st.container(border=True):
-                    st.markdown("#### ✨ Option 2: Macro Pivot")
-                    st.write("Stay on this current timeline window and pivot to extract what the Fed is actually prioritizing instead.")
-                    if st.button("Run Executive Briefing", use_container_width=True, type="primary"):
-                        trigger_briefing = True
-                        
-        # SCENARIO 2: User has fully maxed out the scroll horizon to 50
+            ⏳ **Rolling Limit Warning:** You will regain enough capacity to run *one more query* in {wait_info}. However, your full daily allowance will not completely reset until midnight UTC.
+            
+            ---
+            
+            #### 💡 How to keep testing right now:
+            Switch the **AI Engine Selection** dropdown on the left sidebar to **Llama 4 Scout 17B (Balanced, High Limits)**. 
+            It has a much higher daily token allowance and will process your query instantly!
+            """)
         else:
-            st.markdown("⚠️ **Maximum Search Horizon Reached:** You have exhausted the scroll limit (50 speeches). This specific topic has not been addressed by Fed officials in recent months.")
-            trigger_briefing = True
+            st.error("### 🚨 Extraction Pipeline Snag")
+            st.code(error_msg, language="bash")
+            
+    else:
+        theme = result.get("theme", "N/A")
+        stance = result.get("stance", "Out of Scope")
+        exact_quote = result.get("exact_quote", "")
         
-        # --- THE BRIEFING COMPILER BLOCK ---
-        if trigger_briefing:
-            with st.spinner("Compiling current central bank priority briefing..."):
+        # -------------------------------------------------------------
+        # THE MACRO PIVOT: Triggered when the AI determines the topic is missing
+        # -------------------------------------------------------------
+        if stance == "Out of Scope" or exact_quote.upper() == "N/A":
+            st.warning(f"🔍 The Federal Reserve has not explicitly discussed the specific theme of your question (**'{query}'**) in these recent speeches.")
+            st.divider()
+            
+            with st.spinner("Compiling current central bank priority briefing instead..."):
                 fallback_speeches = speech_pool[:3]
                 fallback_urls = [s['url'] for s in fallback_speeches]
                 
@@ -138,21 +174,15 @@ if submit_btn or query:
                 if combined_fallback_text.strip():
                     client = Groq(api_key=api_key)
                     briefing_prompt = f"""
-                    The user submitted a query about '{query}', which is completely absent from the current Federal Reserve speech directory pool.
-                    
-                    Analyze the following recent speech transcript text chunks and generate a crisp, highly professional 3-bullet-point Executive Briefing summarizing the dominant macroeconomic issues and themes the speakers are ACTUALLY prioritizing right now. Ensure it sounds like a research memo.
-                    
-                    Text Context:
-                    {combined_fallback_text}
+                    Analyze the following recent speech transcript chunks and generate a crisp, highly professional 3-bullet-point Executive Briefing summarizing what the speakers are ACTUALLY prioritizing right now.
+                    Text Context: {combined_fallback_text}
                     """
-                    
                     try:
                         brief_response = client.chat.completions.create(
                             model=selected_model,
                             messages=[{"role": "user", "content": briefing_prompt}],
                             temperature=0.2
                         )
-                        st.divider()
                         st.subheader("📋 Current Fed Priority Briefing")
                         st.success("While your exact theme was out of scope, here is what central bankers are actively focusing on:")
                         st.markdown(brief_response.choices[0].message.content)
@@ -161,83 +191,12 @@ if submit_btn or query:
                 else:
                     st.error("Fallback scraping returned no readable document text chunks to analyze.")
                     
-        st.stop() 
-    # ====================================================================
-        
-    # Display the auto-selected cohort to the user dynamically
-    st.info(f"🤖 **Auto-Selected Cohort ({len(selected_metas)} Speeches Match Your Theme):**")
-    for meta in selected_metas:
-        st.markdown(f"- **{meta['date']}**: [{meta['title']}]({meta['url']})")
-        
-    # STEP B: Lazy load, Scrape, and Vectorize ONLY the auto-selected speeches
-    with st.spinner("Scraping and building isolated vector cohort..."):
-        urls = tuple([meta['url'] for meta in selected_metas])
-        index, chunks = lazy_load_and_index_cohort(urls)
-        
-    if isinstance(index, str) or not index:
-        st.error("Could not process text data for the auto-selected speeches.")
-        st.stop()
-        
-    # STEP C: RAG Extraction Pipeline
-    with st.spinner("Extracting semantic insights..."):
-        top_chunks = retrieve_top_k(query, index, chunks, k=3)
-        combined_context = " ".join(top_chunks)
-        result = generate_general_semantic_signal(query, top_chunks, api_key, model_name=selected_model)
-        
-    # ====================================================================
-    # 🎨 STEP D: Render Output Data (With Polished Error Handling)
-    # ====================================================================
-    if "error" in result:
-        error_msg = result["error"]
-        
-        # Check if it's a standard Groq Rate Limit (429)
-        # Check if it's a standard Groq Rate Limit (429)
-        if "429" in error_msg or "rate_limit_exceeded" in error_msg:
-            
-            # Extract the wait time and strip out the ugly decimals
-            wait_time_match = re.search(r"try again in ([0-9a-zA-Z.]+)", error_msg)
-            if wait_time_match:
-                raw_time = wait_time_match.group(1) # e.g., "10m46.271999999s"
-                clean_time = re.sub(r'\.\d+', '', raw_time) # Removes .271999999
-                wait_info = f"**{clean_time}**"
-            else:
-                wait_info = "a few minutes"
-            
-            # 1. The Title (Centered and Streamlit Red)
-            st.markdown(
-                "<h3 style='text-align: center; color: #ff4b4b;'>🛑 70B Model Limit Reached</h3>", 
-                unsafe_allow_html=True
-            )
-            
-            # 2. The Standard Text Underneath (Not Red)
-            st.markdown(f"""
-            You have exhausted your daily free-tier token allocation for the heavy **Llama 3.3 70B** model. 
-            
-            ⏳ **Rolling Limit Warning:** You will regain enough capacity to run *one more query* in {wait_info} However, your full daily allowance will not completely reset until midnight UTC.
-            
-            ---
-            
-            #### 💡 How to keep testing right now:
-            Switch the **AI Engine Selection** dropdown on the left sidebar to **Llama 4 Scout 17B (Balanced, High Limits)**. 
-            It has a much higher daily token allowance and will process your query instantly!
-            """)
-
-
-        else:
-            # Fallback for any other unexpected API errors
-            st.error("### 🚨 Extraction Pipeline Snag")
-            st.code(error_msg, language="bash")
-            
-    else:
-        theme = result.get("theme", "N/A")
-        stance = result.get("stance", "Out of Scope")
-        exact_quote = result.get("exact_quote", "")
-        
-        if stance == "Out of Scope" or exact_quote.upper() == "N/A":
-            st.info(f"ℹ️ Analysis concluded: Theme '{theme}' is out of scope within the contextual data.")
-            st.json(result)
+        # -------------------------------------------------------------
+        # STANDARD EXTRACTION: Render the valid macroeconomic data
+        # -------------------------------------------------------------
         else:
             overlap = hallucination_check(exact_quote, combined_context)
+            
             if overlap < 0.90:
                 st.error(f"🚨 Hallucination Blocked! Quote mathematical overlap was only {overlap*100:.1f}%.")
             else:
