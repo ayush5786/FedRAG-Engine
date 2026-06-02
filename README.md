@@ -3,6 +3,7 @@
 **Live Demo:** [Click here to view the live app on Streamlit Cloud](https://ayush5786-fedrag-engine-fed-app-5asgp0.streamlit.app/)
 
 ![App Screenshot](FedRAG-Engine.png)
+*(Note: The browser view is zoomed out in the screenshot above to capture the complete extraction pipeline, dynamic UI, and evidence expanders in a single frame.)*
 
 ## Overview
 
