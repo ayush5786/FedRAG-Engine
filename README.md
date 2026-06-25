@@ -17,7 +17,10 @@ To ensure enterprise-grade reliability, the application features an autonomous *
 
 * **Full-Text Ingestion Pipeline:** Dynamically polls the Federal Reserve XML RSS feed and utilizes `BeautifulSoup4` to bypass uninformative metadata, scraping the complete raw text of the selected speech cohort on demand.
 * **Semantic Chunking & Global Retrieval:** Text is aggregated into semantic blocks to preserve paragraph logic. `SentenceTransformers` (`all-MiniLM-L6-v2`) and `FAISS` (L2 distance) generate an in-memory vector database, enabling a global mathematical search across all transcripts simultaneously.
-* **Multi-LLM Orchestration:** Powered by the **Groq API** for ultra-low latency. Uses `Llama 3.3 (70B)` for deep qualitative reasoning, with an integrated UI toggle to instantly route to `Llama 4 Scout (17B)` as a high-capacity fallback to bypass 429 rate limits.
+* **Multi-LLM Orchestration & Fallback Evolution:** Powered by the **Groq API** for ultra-low latency. The primary pipeline utilizes `Llama 3.3 (70B)` for deep qualitative reasoning. Following the deprecation of the initial fallback model (`Llama 4 Scout 17B`), the architecture was migrated to `Qwen 3.6 (27B)` to handle 429 rate limits.
+    * *Why Qwen 3.6 (27B)?* It serves as the optimal mid-tier bridge. It operates on an isolated rate-limit pool from the primary Llama model, handles structural JSON formatting cleanly, and maintains high-level logical benchmarks required for complex financial extraction.
+    * *Why not smaller models (e.g., Llama 8B)?* While 8B models offer massive daily request ceilings on Groq's free tier, they lack the nuanced reasoning capacity needed to accurately parse complex Federal Reserve syntax when substituting for the 70B model.
+    * *Why not massive models (e.g., 120B+)?* Larger open-weight models introduce severe token consumption overhead and tighter per-minute caps, risking pipeline stagnation during multi-query lookups.
 * **Frontend UI:** Built with `Streamlit`, leveraging `@st.cache_resource` and `@st.cache_data` to persist the FAISS index in memory. This eliminates redundant scraping and embedding overhead, **cutting repeat-query latency by 86%** (~15s down to ~2s).
 
 ## 🛡️ Enterprise Guardrails & Hallucination Prevention
