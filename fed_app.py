@@ -36,16 +36,16 @@ with st.sidebar:
         "Choose Extraction Model:",
         options=[
             "Llama 3.3 70B (Deep Reasoning, Strict Limits)", 
-            "Llama 4 Scout 17B (Balanced, High Limits)"
+            "Qwen 27B (Balanced, High Limits)"
         ],
-        help="If you receive a 'Rate Limit' error, switch to the 17B model for higher daily token allowances."
+        help="If you receive a 'Rate Limit' error, switch to the Qwen 27B model for an isolated token pool and high capacity."
     )
     
     # Map the UI choice to the actual Groq model ID
     if "70B" in model_choice:
         selected_model = "llama-3.3-70b-versatile"
     else:
-        selected_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+        selected_model = "qwen/qwen3.6-27b"
 
 # --- 2. FETCH HEADLINES ONLY (Instant) ---
 @st.cache_data(ttl=3600)
