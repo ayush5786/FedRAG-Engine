@@ -142,7 +142,7 @@ if (query) and query.strip():
             ---
             
             #### 💡 How to keep testing right now:
-            Switch the **AI Engine Selection** dropdown on the left sidebar to **Llama 4 Scout 17B (Balanced, High Limits)**. 
+            Switch the **AI Engine Selection** dropdown on the left sidebar to **QWEN 3.6 (27B, Balanced, High Limits)**. 
             It has a much higher daily token allowance and will process your query instantly!
             """)
         else:
